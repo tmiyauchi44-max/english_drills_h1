@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>単語4択テスト</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, sans-serif; background:#f8fafc; color:#0f172a; line-height:1.6; }
+    .app { max-width:900px; margin:0 auto; padding:18px; }
+    header { text-align:center; margin-bottom:18px; }
+    h1 { margin:0 0 6px; font-size:clamp(26px,6vw,42px); }
+    .subtitle { margin:0; color:#64748b; font-size:15px; }
+    .stats { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:16px; }
+    .stat-card { background:#fff; border-radius:18px; padding:12px; text-align:center; box-shadow:0 1px 8px rgba(15,23,42,.08); }
+    .stat-label { color:#64748b; font-size:13px; }
+    .stat-value { font-size:24px; font-weight:800; }
+    .card { background:#fff; border-radius:24px; padding:18px; box-shadow:0 8px 24px rgba(15,23,42,.12); }
+    .question-box { background:#f8fafc; border:1px solid #e2e8f0; border-radius:18px; padding:22px 16px; font-size:clamp(28px,8vw,46px); font-weight:900; text-align:center; margin-bottom:14px; }
+    .choices { display:grid; grid-template-columns:1fr; gap:10px; margin-bottom:14px; }
+    button { border:none; border-radius:18px; padding:16px; font-size:18px; font-weight:800; cursor:pointer; }
+    .choice { background:#fff; color:#0f172a; border:1px solid #cbd5e1; text-align:left; }
+    .choice.correct { background:#dcfce7; border-color:#16a34a; }
+    .choice.wrong { background:#fee2e2; border-color:#dc2626; }
+    .answer-box { display:none; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:18px; padding:16px; margin-bottom:14px; }
+    .answer-text { font-size:clamp(22px,6vw,30px); font-weight:800; }
+    .button-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+    .easy { background:#fff; color:#0f172a; border:1px solid #cbd5e1; }
+    .hard { background:#0f172a; color:#fff; }
+    .reset { display:block; margin:16px auto 0; background:transparent; color:#334155; }
+    .finish { text-align:center; display:none; }
+    @media (min-width:700px) {
+      .stats { grid-template-columns:repeat(5,1fr); }
+      .choices { grid-template-columns:1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>単語4択テスト</h1>
+      <p class="subtitle">英語に合う日本語を4択から選びます。</p>
+    </header>
+
+    <section id="drillArea">
+      <div class="stats">
+        <div class="stat-card"><div class="stat-label">セット内クリア</div><div class="stat-value" id="masteredCount">0</div></div>
+        <div class="stat-card"><div class="stat-label">復習中</div><div class="stat-value" id="reviewCount">0</div></div>
+        <div class="stat-card"><div class="stat-label">セット内残り</div><div class="stat-value" id="remainingCount">0</div></div>
+        <div class="stat-card"><div class="stat-label">セット</div><div class="stat-value" id="setCount">1/1</div></div>
+        <div class="stat-card"><div class="stat-label">全問題</div><div class="stat-value" id="totalCount">0</div></div>
+      </div>
+
+      <main class="card">
+        <div id="questionId">問題</div>
+        <p>次の英語の意味を選びなさい。</p>
+        <div class="question-box" id="questionText"></div>
+        <div class="choices" id="choices"></div>
+
+        <div class="answer-box" id="answerBox">
+          <div id="resultLabel">答え</div>
+          <div class="answer-text" id="answerText"></div>
+          <div id="explanationText"></div>
+        </div>
+
+        <div class="button-grid">
+          <button class="easy" id="easyButton" disabled>簡単</button>
+          <button class="hard" id="hardButton" disabled>難しい</button>
+        </div>
+      </main>
+    </section>
+
+    <section class="card finish" id="finishArea">
+      <h2>全問終了！</h2>
+      <p>すべてのセットをクリアしました。</p>
+      <button class="hard" id="restartButton">もう一度練習する</button>
+    </section>
+
+    <button class="reset" id="resetButton">最初からやり直す</button>
+  </div>
+
+  <script>
+    const QUESTIONS_PER_SET = 20;
+
+    const questions = [
+      { id:"1", question:"discovery", answer:"発見", explanation:"finding something new", options:["発見","アニメーション","健康","量"] },
+      { id:"2", question:"animation", answer:"アニメーション", explanation:"moving pictures", options:["発見","アニメーション","親切さ","犠牲"] },
+      { id:"3", question:"pretty", answer:"かなり、とても／かわいい", explanation:"quite; beautiful or cute", options:["かなり、とても／かわいい","見慣れない","液体","勇敢な"] },
+      { id:"4", question:"unfamiliar", answer:"見慣れない、よく知らない", explanation:"not known well", options:["便利さ","見慣れない、よく知らない","皇帝","外側の"] },
+      { id:"5", question:"dreamland", answer:"夢の国", explanation:"a wonderful imaginary place", options:["夢の国","漫画家","吹雪","状態"] },
+      { id:"6", question:"cartoonist", answer:"漫画家", explanation:"a person who draws cartoons", options:["漫画家","アザラシ","商品","力"] },
+      { id:"7", question:"describe", answer:"説明する、描写する", explanation:"to say what something is like", options:["発見する","説明する、描写する","包む","確認する"] },
+      { id:"8", question:"episode", answer:"エピソード、出来事", explanation:"one event or one part of a story", options:["部署、売り場","エピソード、出来事","表現","捕食者"] },
+      { id:"9", question:"cartoon", answer:"漫画、アニメ", explanation:"a funny drawing or animated show", options:["漫画、アニメ","夢の国","ペンギン","ステッカー"] },
+      { id:"10", question:"discover", answer:"発見する", explanation:"to find something new", options:["発見する","潜る","発達する","絞る"] },
+
+      { id:"11", question:"convenience", answer:"便利さ", explanation:"the quality of being useful and easy", options:["便利さ","不幸な","バランス","害"] },
+      { id:"12", question:"unwrap", answer:"包みを開ける", explanation:"to remove the paper around something", options:["包みを開ける","包む","交代する","犠牲にする"] },
+      { id:"13", question:"delighted", answer:"とてもうれしい", explanation:"very pleased", options:["とてもうれしい","豪華な","独特な","均等に"] },
+      { id:"14", question:"convenient", answer:"便利な", explanation:"easy and useful", options:["便利な","すばらしい","勇敢な","液体の"] },
+      { id:"15", question:"sticker", answer:"ステッカー、シール", explanation:"a small sticky paper or picture", options:["ステッカー、シール","アザラシ","くじら","皇帝"] },
+      { id:"16", question:"thoughtful", answer:"思いやりのある", explanation:"kind and caring", options:["思いやりのある","見慣れない","不幸な","外側の"] },
+      { id:"17", question:"product", answer:"製品、商品", explanation:"something made to be sold", options:["製品、商品","発見","表現","量"] },
+      { id:"18", question:"bit", answer:"少し、少量", explanation:"a small amount", options:["少し、少量","状態","液体","力"] },
+      { id:"19", question:"kindness", answer:"親切、優しさ", explanation:"being kind", options:["親切、優しさ","健康","恐れ","犠牲"] },
+      { id:"20", question:"notice", answer:"気づく", explanation:"to become aware of something", options:["気づく","説明する","潜る","確認する"] },
+
+      { id:"21", question:"department", answer:"部署、売り場", explanation:"a section of a store or company", options:["部署、売り場","漫画","吹雪","捕食者"] },
+      { id:"22", question:"wrap", answer:"包む", explanation:"to cover something with paper or cloth", options:["包む","包みを開ける","発達する","交代する"] },
+      { id:"23", question:"gorgeous", answer:"豪華な、見事な", explanation:"very beautiful or impressive", options:["豪華な、見事な","便利な","不幸な","均等に"] },
+      { id:"24", question:"fancy", answer:"高級な、おしゃれな", explanation:"special, decorative, or expensive-looking", options:["高級な、おしゃれな","液体の","勇敢な","独特な"] },
+      { id:"25", question:"spare", answer:"余分の、予備の", explanation:"extra; available", options:["余分の、予備の","かなり、とても／かわいい","恐れ","量"] },
+      { id:"26", question:"contrast", answer:"対比、対照", explanation:"a clear difference", options:["対比、対照","発見","便利さ","力"] },
+      { id:"27", question:"balance", answer:"バランス、釣り合い", explanation:"a state in which things are equal or steady", options:["バランス、釣り合い","犠牲","健康","夢の国"] },
+      { id:"28", question:"unhappy", answer:"不幸な、うれしくない", explanation:"not happy", options:["不幸な、うれしくない","思いやりのある","すばらしい","外側の"] },
+      { id:"29", question:"health", answer:"健康", explanation:"the condition of the body or mind", options:["健康","害","表現","アニメーション"] },
+      { id:"30", question:"harm", answer:"害、損害", explanation:"damage or injury", options:["害、損害","親切","状態","部署、売り場"] },
+
+      { id:"31", question:"dedicate", answer:"ささげる、専念する", explanation:"to give time or effort to something", options:["ささげる、専念する","発見する","包む","確認する"] },
+      { id:"32", question:"amount", answer:"量、額", explanation:"how much there is", options:["量、額","商品","エピソード","くじら"] },
+      { id:"33", question:"emperor", answer:"皇帝", explanation:"a male ruler of an empire", options:["皇帝","漫画家","捕食者","ステッカー"] },
+      { id:"34", question:"penguin", answer:"ペンギン", explanation:"a black and white bird that cannot fly", options:["ペンギン","アザラシ","シャチ","漫画"] },
+      { id:"35", question:"dive", answer:"飛び込む、潜る", explanation:"to jump into water or go underwater", options:["飛び込む、潜る","絞る","発達する","交代する"] },
+      { id:"36", question:"amazing", answer:"すばらしい、驚くべき", explanation:"very surprising or wonderful", options:["すばらしい、驚くべき","不幸な","便利な","液体の"] },
+      { id:"37", question:"blizzard", answer:"猛吹雪", explanation:"a strong snowstorm", options:["猛吹雪","状態","夢の国","犠牲"] },
+      { id:"38", question:"condition", answer:"状態、条件", explanation:"state or situation", options:["状態、条件","量","表現","健康"] },
+      { id:"39", question:"develop", answer:"発達する、発展する", explanation:"to grow or improve", options:["発達する、発展する","発見する","包みを開ける","説明する"] },
+      { id:"40", question:"unique", answer:"独特な、唯一の", explanation:"special and different from others", options:["独特な、唯一の","豪華な","余分の","均等に"] },
+
+      { id:"41", question:"enable", answer:"可能にする", explanation:"to make something possible", options:["可能にする","害を与える","専念する","確認する"] },
+      { id:"42", question:"huddling", answer:"身を寄せ合うこと", explanation:"staying close together in a group", options:["身を寄せ合うこと","交代","液体","恐れ"] },
+      { id:"43", question:"huddle", answer:"身を寄せ合う", explanation:"to stay close together", options:["身を寄せ合う","飛び込む","包む","絞る"] },
+      { id:"44", question:"rotate", answer:"交代する、回転する", explanation:"to move around in turns", options:["交代する、回転する","発達する","気づく","説明する"] },
+      { id:"45", question:"outside", answer:"外側、外で", explanation:"not inside", options:["外側、外で","健康","少し","便利さ"] },
+      { id:"46", question:"equally", answer:"平等に、均等に", explanation:"in the same way or amount", options:["平等に、均等に","かなり","とてもうれしく","最終的に"] },
+      { id:"47", question:"liquid", answer:"液体", explanation:"something like water, not solid or gas", options:["液体","吹雪","犠牲","商品"] },
+      { id:"48", question:"squeeze", answer:"絞る、押しつぶす", explanation:"to press something strongly", options:["絞る、押しつぶす","潜る","確認する","包む"] },
+      { id:"49", question:"strength", answer:"力、強さ", explanation:"power", options:["力、強さ","量","発見","表現"] },
+      { id:"50", question:"sacrifice", answer:"犠牲", explanation:"giving up something important", options:["犠牲","健康","親切","対比"] },
+
+      { id:"51", question:"expression", answer:"表現", explanation:"a word or phrase", options:["表現","状態","部署","発見"] },
+      { id:"52", question:"fear", answer:"恐れ、恐怖", explanation:"the feeling of being afraid", options:["恐れ、恐怖","便利さ","力","少し"] },
+      { id:"53", question:"predator", answer:"捕食者", explanation:"an animal that hunts other animals", options:["捕食者","漫画家","皇帝","ペンギン"] },
+      { id:"54", question:"seal", answer:"アザラシ", explanation:"a sea animal", options:["アザラシ","シャチ","くじら","ステッカー"] },
+      { id:"55", question:"killer whale", answer:"シャチ", explanation:"a large black and white sea animal", options:["シャチ","アザラシ","ペンギン","漫画"] },
+      { id:"56", question:"eventually", answer:"ついに、やがて", explanation:"in the end", options:["ついに、やがて","平等に","かなり","外で"] },
+      { id:"57", question:"brave", answer:"勇敢な", explanation:"not afraid to do difficult things", options:["勇敢な","不幸な","見慣れない","便利な"] },
+      { id:"58", question:"confirm", answer:"確認する", explanation:"to make sure something is true", options:["確認する","説明する","発見する","包む"] }
+    ];
+
+    let questionSets = [];
+    let currentSetIndex = 0;
+    let currentQuestion = null;
+    let waitingQuestions = [];
+    let masteredIds = [];
+    let reviewIds = [];
+    let answered = false;
+    let selectedOption = null;
+
+    const drillArea = document.getElementById("drillArea");
+    const finishArea = document.getElementById("finishArea");
+    const masteredCount = document.getElementById("masteredCount");
+    const reviewCount = document.getElementById("reviewCount");
+    const remainingCount = document.getElementById("remainingCount");
+    const setCount = document.getElementById("setCount");
+    const totalCount = document.getElementById("totalCount");
+    const questionId = document.getElementById("questionId");
+    const questionText = document.getElementById("questionText");
+    const choices = document.getElementById("choices");
+    const answerBox = document.getElementById("answerBox");
+    const resultLabel = document.getElementById("resultLabel");
+    const answerText = document.getElementById("answerText");
+    const explanationText = document.getElementById("explanationText");
+    const easyButton = document.getElementById("easyButton");
+    const hardButton = document.getElementById("hardButton");
+    const resetButton = document.getElementById("resetButton");
+    const restartButton = document.getElementById("restartButton");
+
+    function shuffleArray(array) {
+      const copied = array.slice();
+      for (let i = copied.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copied[i], copied[j]] = [copied[j], copied[i]];
+      }
+      return copied;
+    }
+
+    function chunkQuestions(list, size) {
+      const chunks = [];
+      for (let i = 0; i < list.length; i += size) {
+        chunks.push(list.slice(i, i + size));
+      }
+      return chunks;
+    }
+
+    function startSet(index) {
+      currentSetIndex = index;
+      const selectedSet = shuffleArray(questionSets[currentSetIndex] || []);
+      currentQuestion = selectedSet[0] || null;
+      waitingQuestions = selectedSet.slice(1);
+      masteredIds = [];
+      reviewIds = [];
+      answered = false;
+      selectedOption = null;
+      render();
+    }
+
+    function showFinish() {
+      drillArea.style.display = "none";
+      finishArea.style.display = "block";
+      resetButton.style.display = "none";
+    }
+
+    function goToNextQuestion(nextWaitingQuestions) {
+      if (nextWaitingQuestions.length === 0) {
+        const nextSetIndex = currentSetIndex + 1;
+        if (nextSetIndex >= questionSets.length) {
+          currentQuestion = null;
+          showFinish();
+          return;
+        }
+        startSet(nextSetIndex);
+        return;
+      }
+
+      currentQuestion = nextWaitingQuestions[0];
+      waitingQuestions = nextWaitingQuestions.slice(1);
+      answered = false;
+      selectedOption = null;
+      render();
+    }
+
+    function chooseOption(option) {
+      if (answered) return;
+      answered = true;
+      selectedOption = option;
+      render();
+    }
+
+    function markEasy() {
+      if (!currentQuestion || !answered) return;
+      if (!masteredIds.includes(currentQuestion.id)) {
+        masteredIds.push(currentQuestion.id);
+      }
+      reviewIds = reviewIds.filter(id => id !== currentQuestion.id);
+      goToNextQuestion(waitingQuestions);
+    }
+
+    function markHard() {
+      if (!currentQuestion || !answered) return;
+      if (!reviewIds.includes(currentQuestion.id)) {
+        reviewIds.push(currentQuestion.id);
+      }
+      const nextWaitingQuestions = waitingQuestions.slice();
+      const insertPosition = Math.min(3, nextWaitingQuestions.length);
+      nextWaitingQuestions.splice(insertPosition, 0, currentQuestion);
+      goToNextQuestion(nextWaitingQuestions);
+    }
+
+    function resetApp() {
+      drillArea.style.display = "block";
+      finishArea.style.display = "none";
+      resetButton.style.display = "block";
+      questionSets = chunkQuestions(questions, QUESTIONS_PER_SET);
+      startSet(0);
+    }
+
+    function render() {
+      if (!currentQuestion) return;
+
+      masteredCount.textContent = masteredIds.length;
+      reviewCount.textContent = reviewIds.length;
+      remainingCount.textContent = waitingQuestions.length + 1;
+      setCount.textContent = (currentSetIndex + 1) + "/" + questionSets.length;
+      totalCount.textContent = questions.length;
+
+      questionId.textContent = "問題 " + currentQuestion.id;
+      questionText.textContent = currentQuestion.question;
+
+      choices.innerHTML = "";
+      currentQuestion.options.forEach(function(option, index) {
+        const btn = document.createElement("button");
+        btn.className = "choice";
+        btn.textContent = String.fromCharCode(65 + index) + ". " + option;
+        btn.disabled = answered;
+
+        if (answered && option === currentQuestion.answer) btn.classList.add("correct");
+        if (answered && option === selectedOption && option !== currentQuestion.answer) btn.classList.add("wrong");
+
+        btn.addEventListener("click", function() {
+          chooseOption(option);
+        });
+
+        choices.appendChild(btn);
+      });
+
+      if (answered) {
+        const isCorrect = selectedOption === currentQuestion.answer;
+        answerBox.style.display = "block";
+        resultLabel.textContent = isCorrect ? "正解！" : "不正解";
+        answerText.textContent = currentQuestion.answer;
+        explanationText.textContent = currentQuestion.explanation;
+        easyButton.disabled = false;
+        hardButton.disabled = false;
+      } else {
+        answerBox.style.display = "none";
+        easyButton.disabled = true;
+        hardButton.disabled = true;
+      }
+    }
+
+    easyButton.addEventListener("click", markEasy);
+    hardButton.addEventListener("click", markHard);
+    resetButton.addEventListener("click", resetApp);
+    restartButton.addEventListener("click", resetApp);
+
+    resetApp();
+  </script>
+</body>
+</html>
